@@ -50,14 +50,15 @@
   }
 
   function updateGameStatus() {
-    if (moves === scale * scale) {
-      gameStatus = 'draw';
-      matches++;
-    }
-    else if (isActivePlayerWin()) {
+    if (isActivePlayerWin()) {
       gameStatus = 'win';
       matches++;
       wins[activePlayer]++;
+    }
+
+    else if (moves === scale * scale) {
+      gameStatus = 'draw';
+      matches++;
     }
   }
 
@@ -139,12 +140,16 @@
     <Setup on:start={startGame}></Setup>
   {:else if gameStatus == 'turn'}
     <div class="info">
-      <p>Ход игрока {activePlayer} </p>
+      <p>Ход №{moves} игрок - {activePlayer} </p>
     </div>
     <Board {scale}, {activePlayer} on:step={makeStep}></Board>
   {:else}
     <div class="results">
-      <p> Игрок {notActivePlayer} победил </p>
+      { #if gameStatus == 'win'}
+        <p> Игрок {notActivePlayer} победил </p>
+        {:else}
+        <p>Ничья</p>
+      {/if}
       <button class="btn" on:click={restart}>Начать новую игру</button>
     </div>
   {/if}

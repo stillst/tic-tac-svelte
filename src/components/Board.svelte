@@ -14,7 +14,7 @@
   .board {
     display: flex;
     flex-direction: column;
-    padding: 5px;
+    padding: 15px;
     max-width: 900px;
     overflow-x: auto;
   }

@@ -31,13 +31,13 @@
   </h1>
   <div class="info">
     <span>
-    0 победил {wins.O} раз
+      {wins.O} побед ноликов
     </span>
     <span>
       Матч № {matches}
     </span>
     <span>
-      X победил {wins.X} раз
+      {wins.X} побед крестиков
     </span> 
   </div>
 </header>
