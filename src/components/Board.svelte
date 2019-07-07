@@ -16,7 +16,7 @@
     flex-direction: column;
     padding: 5px;
     max-width: 900px;
-    overflow-x: scroll;
+    overflow-x: auto;
   }
   .row {
     display: flex;
