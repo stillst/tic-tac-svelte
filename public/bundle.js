@@ -852,6 +852,7 @@ var app = (function () {
 				span.className = "svelte-nvj5hp";
 				add_location(span, file$2, 37, 4, 615);
 				attr(input, "type", "number");
+				input.required = true;
 				input.min = "3";
 				input.max = "15";
 				input.className = "svelte-nvj5hp";
@@ -860,7 +861,7 @@ var app = (function () {
 				add_location(label, file$2, 36, 2, 603);
 				button.className = "btn";
 				button.type = "submit";
-				add_location(button, file$2, 39, 2, 714);
+				add_location(button, file$2, 39, 2, 722);
 				form.className = "svelte-nvj5hp";
 				add_location(form, file$2, 35, 0, 557);
 

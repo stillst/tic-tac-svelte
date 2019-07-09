@@ -35,8 +35,7 @@
 
 <form on:submit|preventDefault={startGame}>
   <label>
-    <span>Размер поля:</span><input type="number" min="3" max="15" bind:value="{scale}">
-  </label> 
+    <span>Размер поля:</span><input type="number" required min="3" max="15" bind:value="{scale}">
+  </label>
   <button class="btn" type="submit">Начать игру</button>
 </form>
-  
