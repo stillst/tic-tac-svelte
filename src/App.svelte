@@ -2,6 +2,7 @@
   import Board from './components/Board.svelte';
   import Setup from './components/Setup.svelte';
   import Score from './components/Score.svelte';
+  import Result from './components/Result.svelte';
   import { activePlayer } from './store.js';
 
   let matches = 0;
@@ -25,24 +26,6 @@
   $: notActivePlayer = $activePlayer === 'X'
     ? 'O'
     : 'X';
-
-  function startGame(event) {
-    scale = event.detail;
-    gameStatus = 'turn';
-  }
-
-  function restart() {
-    scale = 0;
-    moves = 0;
-    gameStatus = 'start';
-  }
-
-  function makeStep(event) {
-    moves++;
-    updateBoards(event.detail);
-    updateGameStatus();
-    updateActivePlayer();
-  }
 
   function updateBoards(info) {
     board[info.row][info.col] = $activePlayer;
@@ -105,6 +88,24 @@
 
     return false;
   }
+
+  function restart() {
+    scale = 0;
+    moves = 0;
+    gameStatus = 'start';
+  }
+
+  function makeStep(event) {
+    moves++;
+    updateBoards(event.detail);
+    updateGameStatus();
+    updateActivePlayer();
+  }
+
+  function startGame(event) {
+    scale = event.detail;
+    gameStatus = 'turn';
+  }
 </script>
 
 <style>
@@ -119,37 +120,15 @@
 		color: #2c3e50;
 		border: 1px solid #000;
   }
-
-  .info {
-    text-align: center;
-  }
-
-  .results {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-bottom: 10px;
-  }
 </style>
-
 
 <div id="app">
   <Score {matches}, {wins}></Score>
   { #if gameStatus == 'start'}
     <Setup on:start={startGame}></Setup>
   {:else if gameStatus == 'turn'}
-    <div class="info">
-      <p>Ход №{moves} игрок - {$activePlayer} </p>
-    </div>
-    <Board {scale} on:step={makeStep}></Board>
+    <Board {scale} {moves} on:step={makeStep}></Board>
   {:else}
-    <div class="results">
-      { #if gameStatus == 'win'}
-        <p> Игрок {notActivePlayer} победил </p>
-        {:else}
-        <p>Ничья</p>
-      {/if}
-      <button class="btn" on:click={restart}>Начать новую игру</button>
-    </div>
+    <Result {gameStatus} player={notActivePlayer} on:restart={restart}></Result>
   {/if}
 </div>
