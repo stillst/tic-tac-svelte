@@ -108,6 +108,7 @@
   class:inactive={!active}
   class:x={player === 'X'}
   class:o={player === 'O'}
+  disabled={!active}
   on:click="{makeStep}"
 >
 </button>

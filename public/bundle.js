@@ -427,11 +427,12 @@ var app = (function () {
 	const file = "src/components/Cell.svelte";
 
 	function create_fragment(ctx) {
-		var button, dispose;
+		var button, button_disabled_value, dispose;
 
 		return {
 			c: function create() {
 				button = element("button");
+				button.disabled = button_disabled_value = !ctx.active;
 				button.className = "svelte-1xgiiod";
 				toggle_class(button, "inactive", !ctx.active);
 				toggle_class(button, "x", ctx.player === 'X');
@@ -449,6 +450,10 @@ var app = (function () {
 			},
 
 			p: function update(changed, ctx) {
+				if ((changed.active) && button_disabled_value !== (button_disabled_value = !ctx.active)) {
+					button.disabled = button_disabled_value;
+				}
+
 				if (changed.active) {
 					toggle_class(button, "inactive", !ctx.active);
 				}
