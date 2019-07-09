@@ -9,18 +9,16 @@ body {
 }
 
 .btn {
-    border: 1px solid #cf0056;
-    background: #cf0056;
+    background: #1abc9c;
     padding: 0.5rem 1rem;
     color: white;
-    border-radius: 5px;
     box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.26);
     cursor: pointer;
+    transition: background 0.4s;
 }
 
-btn:hover,
-btn:active {
-    background: #e40763;
-    border-color: #e40763;
+.btn:hover,
+.btn:active {
+    background: #109077;
     box-shadow: 1px 1px 8px rgba(77, 51, 51, 0.26);
 }

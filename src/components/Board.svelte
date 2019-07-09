@@ -1,4 +1,5 @@
 <script>
+  import { fade } from 'svelte/transition';
   import Cell from './Cell.svelte';
 
   export let scale;
@@ -17,12 +18,13 @@
     max-width: 900px;
     overflow-x: auto;
   }
+
   .row {
     display: flex;
   }
 </style>
 
-<main class="board">
+<main class="board" transition:fade>
   {#each scaleArr as {}, row}
     <div class="row">
       {#each scaleArr as {}, col}

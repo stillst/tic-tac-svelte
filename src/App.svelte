@@ -94,7 +94,7 @@
           slash.push(board[i][j]);
         }
         else if (i + j === scale - 1) {
-          backSlash.push(mirrorBoard[i][j]);
+          backSlash.push(board[i][j]);
         }
       }
     }
@@ -105,7 +105,6 @@
 
     return false;
   }
-
 </script>
 
 <style>

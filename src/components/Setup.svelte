@@ -1,7 +1,8 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  const dispatch = createEventDispatcher();
+
   let scale = 3;
+  const dispatch = createEventDispatcher();
 
   function startGame() {
     dispatch('start', scale);
@@ -28,6 +29,7 @@
     border-radius: 2px;
     text-align: center;
   }
+
   span {
     margin-right: 5px;
   }

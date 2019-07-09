@@ -5,6 +5,8 @@ var app = (function () {
 
 	function noop() {}
 
+	const identity = x => x;
+
 	function add_location(element, file, line, column, char) {
 		element.__svelte_meta = {
 			loc: { file, line, column, char }
@@ -43,6 +45,43 @@ var app = (function () {
 		component.$$.on_destroy.push(unsub.unsubscribe
 			? () => unsub.unsubscribe()
 			: unsub);
+	}
+
+	let now = typeof window !== 'undefined'
+		? () => window.performance.now()
+		: () => Date.now();
+
+	const tasks = new Set();
+	let running = false;
+
+	function run_tasks() {
+		tasks.forEach(task => {
+			if (!task[0](now())) {
+				tasks.delete(task);
+				task[1]();
+			}
+		});
+
+		running = tasks.size > 0;
+		if (running) requestAnimationFrame(run_tasks);
+	}
+
+	function loop(fn) {
+		let task;
+
+		if (!running) {
+			running = true;
+			requestAnimationFrame(run_tasks);
+		}
+
+		return {
+			promise: new Promise(fulfil => {
+				tasks.add(task = [fn, fulfil]);
+			}),
+			abort() {
+				tasks.delete(task);
+			}
+		};
 	}
 
 	function append(target, node) {
@@ -113,6 +152,70 @@ var app = (function () {
 		const e = document.createEvent('CustomEvent');
 		e.initCustomEvent(type, false, false, detail);
 		return e;
+	}
+
+	let stylesheet;
+	let active = 0;
+	let current_rules = {};
+
+	// https://github.com/darkskyapp/string-hash/blob/master/index.js
+	function hash(str) {
+		let hash = 5381;
+		let i = str.length;
+
+		while (i--) hash = ((hash << 5) - hash) ^ str.charCodeAt(i);
+		return hash >>> 0;
+	}
+
+	function create_rule(node, a, b, duration, delay, ease, fn, uid = 0) {
+		const step = 16.666 / duration;
+		let keyframes = '{\n';
+
+		for (let p = 0; p <= 1; p += step) {
+			const t = a + (b - a) * ease(p);
+			keyframes += p * 100 + `%{${fn(t, 1 - t)}}\n`;
+		}
+
+		const rule = keyframes + `100% {${fn(b, 1 - b)}}\n}`;
+		const name = `__svelte_${hash(rule)}_${uid}`;
+
+		if (!current_rules[name]) {
+			if (!stylesheet) {
+				const style = element('style');
+				document.head.appendChild(style);
+				stylesheet = style.sheet;
+			}
+
+			current_rules[name] = true;
+			stylesheet.insertRule(`@keyframes ${name} ${rule}`, stylesheet.cssRules.length);
+		}
+
+		const animation = node.style.animation || '';
+		node.style.animation = `${animation ? `${animation}, ` : ``}${name} ${duration}ms linear ${delay}ms 1 both`;
+
+		active += 1;
+		return name;
+	}
+
+	function delete_rule(node, name) {
+		node.style.animation = (node.style.animation || '')
+			.split(', ')
+			.filter(name
+				? anim => anim.indexOf(name) < 0 // remove specific animation
+				: anim => anim.indexOf('__svelte') === -1 // remove all Svelte animations
+			)
+			.join(', ');
+
+		if (name && !--active) clear_rules();
+	}
+
+	function clear_rules() {
+		requestAnimationFrame(() => {
+			if (active) return;
+			let i = stylesheet.cssRules.length;
+			while (i--) stylesheet.deleteRule(i);
+			current_rules = {};
+		});
 	}
 
 	let current_component;
@@ -214,6 +317,23 @@ var app = (function () {
 		}
 	}
 
+	let promise;
+
+	function wait() {
+		if (!promise) {
+			promise = Promise.resolve();
+			promise.then(() => {
+				promise = null;
+			});
+		}
+
+		return promise;
+	}
+
+	function dispatch(node, direction, kind) {
+		node.dispatchEvent(custom_event(`${direction ? 'intro' : 'outro'}${kind}`));
+	}
+
 	let outros;
 
 	function group_outros() {
@@ -231,6 +351,131 @@ var app = (function () {
 
 	function on_outro(callback) {
 		outros.callbacks.push(callback);
+	}
+
+	function create_bidirectional_transition(node, fn, params, intro) {
+		let config = fn(node, params);
+
+		let t = intro ? 0 : 1;
+
+		let running_program = null;
+		let pending_program = null;
+		let animation_name = null;
+
+		function clear_animation() {
+			if (animation_name) delete_rule(node, animation_name);
+		}
+
+		function init(program, duration) {
+			const d = program.b - t;
+			duration *= Math.abs(d);
+
+			return {
+				a: t,
+				b: program.b,
+				d,
+				duration,
+				start: program.start,
+				end: program.start + duration,
+				group: program.group
+			};
+		}
+
+		function go(b) {
+			const {
+				delay = 0,
+				duration = 300,
+				easing = identity,
+				tick: tick$$1 = noop,
+				css
+			} = config;
+
+			const program = {
+				start: now() + delay,
+				b
+			};
+
+			if (!b) {
+				program.group = outros;
+				outros.remaining += 1;
+			}
+
+			if (running_program) {
+				pending_program = program;
+			} else {
+				// if this is an intro, and there's a delay, we need to do
+				// an initial tick and/or apply CSS animation immediately
+				if (css) {
+					clear_animation();
+					animation_name = create_rule(node, t, b, duration, delay, easing, css);
+				}
+
+				if (b) tick$$1(0, 1);
+
+				running_program = init(program, duration);
+				add_render_callback(() => dispatch(node, b, 'start'));
+
+				loop(now$$1 => {
+					if (pending_program && now$$1 > pending_program.start) {
+						running_program = init(pending_program, duration);
+						pending_program = null;
+
+						dispatch(node, running_program.b, 'start');
+
+						if (css) {
+							clear_animation();
+							animation_name = create_rule(node, t, running_program.b, running_program.duration, 0, easing, config.css);
+						}
+					}
+
+					if (running_program) {
+						if (now$$1 >= running_program.end) {
+							tick$$1(t = running_program.b, 1 - t);
+							dispatch(node, running_program.b, 'end');
+
+							if (!pending_program) {
+								// we're done
+								if (running_program.b) {
+									// intro — we can tidy up immediately
+									clear_animation();
+								} else {
+									// outro — needs to be coordinated
+									if (!--running_program.group.remaining) run_all(running_program.group.callbacks);
+								}
+							}
+
+							running_program = null;
+						}
+
+						else if (now$$1 >= running_program.start) {
+							const p = now$$1 - running_program.start;
+							t = running_program.a + running_program.d * easing(p / running_program.duration);
+							tick$$1(t, 1 - t);
+						}
+					}
+
+					return !!(running_program || pending_program);
+				});
+			}
+		}
+
+		return {
+			run(b) {
+				if (typeof config === 'function') {
+					wait().then(() => {
+						config = config();
+						go(b);
+					});
+				} else {
+					go(b);
+				}
+			},
+
+			end() {
+				clear_animation();
+				running_program = pending_program = null;
+			}
+		};
 	}
 
 	function mount_component(component, target, anchor) {
@@ -372,6 +617,24 @@ var app = (function () {
 				console.warn(`Component was already destroyed`); // eslint-disable-line no-console
 			};
 		}
+	}
+
+	/*
+	Adapted from https://github.com/mattdesl
+	Distributed under MIT License https://github.com/mattdesl/eases/blob/master/LICENSE.md
+	*/
+
+	function fade(node, {
+		delay = 0,
+		duration = 400
+	}) {
+		const o = +getComputedStyle(node).opacity;
+
+		return {
+			delay,
+			duration,
+			css: t => `opacity: ${t * o}`
+		};
 	}
 
 	function noop$1() {}
@@ -556,7 +819,7 @@ var app = (function () {
 		return child_ctx;
 	}
 
-	// (28:6) {#each scaleArr as {}
+	// (30:6) {#each scaleArr as {}
 	function create_each_block_1(ctx) {
 		var current;
 
@@ -596,7 +859,7 @@ var app = (function () {
 		};
 	}
 
-	// (26:2) {#each scaleArr as {}
+	// (28:2) {#each scaleArr as {}
 	function create_each_block(ctx) {
 		var div, t, current;
 
@@ -630,8 +893,8 @@ var app = (function () {
 				}
 
 				t = space();
-				div.className = "row svelte-syzx79";
-				add_location(div, file$1, 26, 4, 394);
+				div.className = "row svelte-x47sh5";
+				add_location(div, file$1, 28, 4, 455);
 			},
 
 			m: function mount(target, anchor) {
@@ -694,7 +957,7 @@ var app = (function () {
 	}
 
 	function create_fragment$1(ctx) {
-		var main, current;
+		var main, main_transition, current;
 
 		var each_value = ctx.scaleArr;
 
@@ -724,8 +987,8 @@ var app = (function () {
 				for (var i = 0; i < each_blocks.length; i += 1) {
 					each_blocks[i].c();
 				}
-				main.className = "board svelte-syzx79";
-				add_location(main, file$1, 24, 0, 339);
+				main.className = "board svelte-x47sh5";
+				add_location(main, file$1, 26, 0, 384);
 			},
 
 			l: function claim(nodes) {
@@ -770,12 +1033,20 @@ var app = (function () {
 				if (current) return;
 				for (var i = 0; i < each_value.length; i += 1) each_blocks[i].i();
 
+				add_render_callback(() => {
+					if (!main_transition) main_transition = create_bidirectional_transition(main, fade, {}, true);
+					main_transition.run(1);
+				});
+
 				current = true;
 			},
 
 			o: function outro(local) {
 				each_blocks = each_blocks.filter(Boolean);
 				for (let i = 0; i < each_blocks.length; i += 1) outro_block(i, 0);
+
+				if (!main_transition) main_transition = create_bidirectional_transition(main, fade, {}, false);
+				main_transition.run(0);
 
 				current = false;
 			},
@@ -786,12 +1057,18 @@ var app = (function () {
 				}
 
 				destroy_each(each_blocks, detaching);
+
+				if (detaching) {
+					if (main_transition) main_transition.end();
+				}
 			}
 		};
 	}
 
 	function instance$1($$self, $$props, $$invalidate) {
-		let { scale } = $$props;
+		
+
+	  let { scale } = $$props;
 	  let scaleArr = [];
 
 		function step_handler(event) {
@@ -849,21 +1126,21 @@ var app = (function () {
 				t_1 = space();
 				button = element("button");
 				button.textContent = "Начать игру";
-				span.className = "svelte-nvj5hp";
-				add_location(span, file$2, 37, 4, 615);
+				span.className = "svelte-1q2safb";
+				add_location(span, file$2, 39, 4, 617);
 				attr(input, "type", "number");
 				input.required = true;
 				input.min = "3";
 				input.max = "15";
-				input.className = "svelte-nvj5hp";
-				add_location(input, file$2, 37, 29, 640);
-				label.className = "svelte-nvj5hp";
-				add_location(label, file$2, 36, 2, 603);
+				input.className = "svelte-1q2safb";
+				add_location(input, file$2, 39, 29, 642);
+				label.className = "svelte-1q2safb";
+				add_location(label, file$2, 38, 2, 605);
 				button.className = "btn";
 				button.type = "submit";
-				add_location(button, file$2, 39, 2, 722);
-				form.className = "svelte-nvj5hp";
-				add_location(form, file$2, 35, 0, 557);
+				add_location(button, file$2, 41, 2, 724);
+				form.className = "svelte-1q2safb";
+				add_location(form, file$2, 37, 0, 559);
 
 				dispose = [
 					listen(input, "input", ctx.input_input_handler),
@@ -905,8 +1182,8 @@ var app = (function () {
 	}
 
 	function instance$2($$self, $$props, $$invalidate) {
-		const dispatch = createEventDispatcher();
-	  let scale = 3;
+		let scale = 3;
+	  const dispatch = createEventDispatcher();
 
 	  function startGame() {
 	    dispatch('start', scale);
@@ -952,18 +1229,18 @@ var app = (function () {
 				span2 = element("span");
 				t8 = text(t8_value);
 				t9 = text(" побед крестиков");
-				h1.className = "svelte-w4jdqy";
-				add_location(h1, file$3, 28, 2, 367);
-				span0.className = "svelte-w4jdqy";
-				add_location(span0, file$3, 32, 4, 425);
-				span1.className = "svelte-w4jdqy";
-				add_location(span1, file$3, 35, 4, 477);
-				span2.className = "svelte-w4jdqy";
-				add_location(span2, file$3, 38, 4, 523);
-				div.className = "info svelte-w4jdqy";
-				add_location(div, file$3, 31, 2, 402);
-				header.className = "svelte-w4jdqy";
-				add_location(header, file$3, 27, 0, 356);
+				h1.className = "svelte-1c640gv";
+				add_location(h1, file$3, 29, 2, 366);
+				span0.className = "svelte-1c640gv";
+				add_location(span0, file$3, 33, 4, 411);
+				span1.className = "svelte-1c640gv";
+				add_location(span1, file$3, 36, 4, 463);
+				span2.className = "svelte-1c640gv";
+				add_location(span2, file$3, 39, 4, 509);
+				div.className = "svelte-1c640gv";
+				add_location(div, file$3, 32, 2, 401);
+				header.className = "svelte-1c640gv";
+				add_location(header, file$3, 28, 0, 355);
 			},
 
 			l: function claim(nodes) {
@@ -1051,7 +1328,7 @@ var app = (function () {
 
 	const file$4 = "src/App.svelte";
 
-	// (146:2) {:else}
+	// (145:2) {:else}
 	function create_else_block(ctx) {
 		var div, t, button, dispose;
 
@@ -1071,9 +1348,9 @@ var app = (function () {
 				button = element("button");
 				button.textContent = "Начать новую игру";
 				button.className = "btn";
-				add_location(button, file$4, 152, 6, 3122);
+				add_location(button, file$4, 151, 6, 3115);
 				div.className = "results svelte-185yusv";
-				add_location(div, file$4, 146, 4, 2963);
+				add_location(div, file$4, 145, 4, 2956);
 				dispose = listen(button, "click", ctx.restart);
 			},
 
@@ -1111,7 +1388,7 @@ var app = (function () {
 		};
 	}
 
-	// (141:33) 
+	// (140:33) 
 	function create_if_block_1(ctx) {
 		var div, p, t0, t1, t2, t3, t4, current;
 
@@ -1131,9 +1408,9 @@ var app = (function () {
 				t3 = text(ctx.$activePlayer);
 				t4 = space();
 				board_1.$$.fragment.c();
-				add_location(p, file$4, 142, 6, 2846);
+				add_location(p, file$4, 141, 6, 2839);
 				div.className = "info svelte-185yusv";
-				add_location(div, file$4, 141, 4, 2821);
+				add_location(div, file$4, 140, 4, 2814);
 			},
 
 			m: function mount(target, anchor) {
@@ -1185,7 +1462,7 @@ var app = (function () {
 		};
 	}
 
-	// (139:2) { #if gameStatus == 'start'}
+	// (138:2) { #if gameStatus == 'start'}
 	function create_if_block(ctx) {
 		var current;
 
@@ -1222,7 +1499,7 @@ var app = (function () {
 		};
 	}
 
-	// (150:8) {:else}
+	// (149:8) {:else}
 	function create_else_block_1(ctx) {
 		var p;
 
@@ -1230,7 +1507,7 @@ var app = (function () {
 			c: function create() {
 				p = element("p");
 				p.textContent = "Ничья";
-				add_location(p, file$4, 150, 8, 3091);
+				add_location(p, file$4, 149, 8, 3084);
 			},
 
 			m: function mount(target, anchor) {
@@ -1247,7 +1524,7 @@ var app = (function () {
 		};
 	}
 
-	// (148:6) { #if gameStatus == 'win'}
+	// (147:6) { #if gameStatus == 'win'}
 	function create_if_block_2(ctx) {
 		var p, t0, t1, t2;
 
@@ -1257,7 +1534,7 @@ var app = (function () {
 				t0 = text("Игрок ");
 				t1 = text(ctx.notActivePlayer);
 				t2 = text(" победил");
-				add_location(p, file$4, 148, 8, 3026);
+				add_location(p, file$4, 147, 8, 3019);
 			},
 
 			m: function mount(target, anchor) {
@@ -1318,7 +1595,7 @@ var app = (function () {
 				if_block.c();
 				div.id = "app";
 				div.className = "svelte-185yusv";
-				add_location(div, file$4, 136, 0, 2660);
+				add_location(div, file$4, 135, 0, 2653);
 			},
 
 			l: function claim(nodes) {
@@ -1472,7 +1749,7 @@ var app = (function () {
 	          slash.push(board[i][j]);
 	        }
 	        else if (i + j === scale - 1) {
-	          backSlash.push(mirrorBoard[i][j]);
+	          backSlash.push(board[i][j]);
 	        }
 	      }
 	    }

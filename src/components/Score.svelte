@@ -14,12 +14,13 @@
     font-size: 25px;
   }
 
-  .info {
+  div {
     display: flex;
     justify-content: space-between;
     background-color: #3498db;
     color: #fff;
   }
+
   span {
     margin: 10px;
   }
@@ -29,7 +30,7 @@
   <h1>
     Крестики нолики
   </h1>
-  <div class="info">
+  <div>
     <span>
       {wins.O} побед ноликов
     </span>
@@ -38,6 +39,6 @@
     </span>
     <span>
       {wins.X} побед крестиков
-    </span> 
+    </span>
   </div>
 </header>
