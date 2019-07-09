@@ -2,27 +2,27 @@
   import Board from './components/Board.svelte';
   import Setup from './components/Setup.svelte';
   import Score from './components/Score.svelte';
-  
+  import { activePlayer } from './store.js';
+
   let matches = 0;
   let wins = { O: 0, X: 0 };
   let scale = 3;
   let gameStatus = 'start';
   let board = {};
   let mirrorBoard = {};
-  let activePlayer = 'X';
   let moves = 0;
 
-  $: for (let row = 0; row < scale; row++) { 
+  $: for (let row = 0; row < scale; row++) {
     board[row] = {};
     mirrorBoard[row] = {};
-    
+
     for (let col = 0; col < scale; col++) {
       board[row][col] = '!';
       mirrorBoard[row][col] = 'f';
     }
   }
 
-  $: notActivePlayer = activePlayer === 'X' 
+  $: notActivePlayer = $activePlayer === 'X'
     ? 'O'
     : 'X';
 
@@ -45,15 +45,15 @@
   }
 
   function updateBoards(info) {
-    board[info.row][info.col] = activePlayer;
-    mirrorBoard[info.col][info.row] = activePlayer;
+    board[info.row][info.col] = $activePlayer;
+    mirrorBoard[info.col][info.row] = $activePlayer;
   }
 
   function updateGameStatus() {
     if (isActivePlayerWin()) {
       gameStatus = 'win';
       matches++;
-      wins[activePlayer]++;
+      wins[$activePlayer]++;
     }
 
     else if (moves === scale * scale) {
@@ -63,12 +63,12 @@
   }
 
   function updateActivePlayer() {
-    activePlayer = notActivePlayer;
+    activePlayer.update(() => notActivePlayer);
   }
 
   function isActivePlayerWin() {
-    return isWinByСross(board) 
-      || isWinByСross(mirrorBoard) 
+    return isWinByСross(board)
+      || isWinByСross(mirrorBoard)
       || isWinBySlash();
   }
 
@@ -76,7 +76,7 @@
     const rows = Object.keys(activeBoard)
 
     for (const row of rows) {
-      if (Object.values(activeBoard[row]).every(val => val === activePlayer)) {        
+      if (Object.values(activeBoard[row]).every(val => val === $activePlayer)) {
         return true;
       }
     }
@@ -92,14 +92,14 @@
       for (let j = 0; j < scale; j++) {
         if (i === j) {
           slash.push(board[i][j]);
-        } 
+        }
         else if (i + j === scale - 1) {
           backSlash.push(mirrorBoard[i][j]);
-        } 
+        }
       }
     }
 
-    if (slash.every(val => val === activePlayer) || backSlash.every(val => val === activePlayer)) {        
+    if (slash.every(val => val === $activePlayer) || backSlash.every(val => val === $activePlayer)) {
       return true;
     }
 
@@ -140,9 +140,9 @@
     <Setup on:start={startGame}></Setup>
   {:else if gameStatus == 'turn'}
     <div class="info">
-      <p>Ход №{moves} игрок - {activePlayer} </p>
+      <p>Ход №{moves} игрок - {$activePlayer} </p>
     </div>
-    <Board {scale}, {activePlayer} on:step={makeStep}></Board>
+    <Board {scale} on:step={makeStep}></Board>
   {:else}
     <div class="results">
       { #if gameStatus == 'win'}

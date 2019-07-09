@@ -2,10 +2,9 @@
   import Cell from './Cell.svelte';
 
   export let scale;
-  export let activePlayer;
   let scaleArr = [];
-  
-  $: for (let i = 0; i < scale; i++) { 
+
+  $: for (let i = 0; i < scale; i++) {
     scaleArr.push(i);
   }
 </script>
@@ -23,14 +22,12 @@
   }
 </style>
 
-<main>
-  <div class="board">
-    {#each scaleArr as {}, row}
-      <div class="row">
-        {#each scaleArr as {}, col}
-          <Cell {row} {col} {activePlayer} on:step></Cell>
-        {/each}
-      </div>
-    {/each}
-  </div>
+<main class="board">
+  {#each scaleArr as {}, row}
+    <div class="row">
+      {#each scaleArr as {}, col}
+        <Cell {row} {col} on:step></Cell>
+      {/each}
+    </div>
+  {/each}
 </main>

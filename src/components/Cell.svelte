@@ -1,18 +1,18 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  const dispatch = createEventDispatcher();
+  import { activePlayer } from '../store.js';
+
   export let row;
   export let col;
-  export let activePlayer;
-  
   let active = true;
   let player = '';
+  const dispatch = createEventDispatcher();
 
   function makeStep() {
     if (active) {
-      dispatch('step', { row, col });
       active = false;
-      player = activePlayer;
+      player = $activePlayer;
+      dispatch('step', { row, col });
     }
   }
 </script>
@@ -104,10 +104,10 @@
   }
 </style>
 
-<button 
-  class:inactive={!active} 
-  class:x={player === 'X'} 
-  class:o={player === 'O'} 
+<button
+  class:inactive={!active}
+  class:x={player === 'X'}
+  class:o={player === 'O'}
   on:click="{makeStep}"
 >
 </button>
